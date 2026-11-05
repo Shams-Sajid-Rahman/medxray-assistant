@@ -1,0 +1,7 @@
+# torch/torchvision are installed separately in the Dockerfile (CPU-only build, much smaller)
+gradio==6.31.0
+chromadb==1.5.9
+google-genai==2.34.0
+grad-cam==1.5.7
+pillow
+numpy

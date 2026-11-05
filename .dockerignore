@@ -1,0 +1,24 @@
+# Python / virtual environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets - never commit keys
+.env
+
+# Generated files
+outputs/
+flagged/
+.gradio/
+
+# Not used in the final app (keep it in Google Drive)
+model/model_v2.pt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.git/
+*.ipynb
