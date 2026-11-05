@@ -12,11 +12,15 @@ import os
 from google import genai
 from google.genai import types
 
-# Change the model without touching code: set GEMINI_MODEL in your environment
-# (or in Hugging Face Space "Variables"). Check current free models at
-# https://ai.google.dev/gemini-api/docs/models
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
-TIMEOUT_MS = 20_000
+# Models are tried in this order. If one is busy (503), out of free quota (429)
+# or not available (404), the next one is tried. Override without touching code
+# with GEMINI_MODELS, e.g.  gemini-3.5-flash-lite,gemini-3.1-flash-lite
+# Current models: https://ai.google.dev/gemini-api/docs/models
+MODELS = [m.strip() for m in os.environ.get(
+    "GEMINI_MODELS",
+    "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash",
+).split(",") if m.strip()]
+TIMEOUT_MS = 15_000   # per model, so the visitor never waits too long
 
 DISCLAIMER = ("This is an AI demo for learning purposes, not a medical diagnosis. "
               "Always consult a qualified doctor.")
@@ -72,21 +76,31 @@ def summarize(label, confidence, pneumonia_prob, chunks):
         f"Reference notes:\n{_format_notes(chunks)}"
     )
     try:
-        response = _get_client().models.generate_content(
-            model=MODEL,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.2,
-            ),
-        )
-        text = (response.text or "").strip()
-        if not text:
-            raise RuntimeError("Empty response from Gemini")
-        return text, "gemini"
-    except Exception as e:   # any failure -> safe template, app keeps working
-        print(f"[summary] Gemini failed, using template: {type(e).__name__}: {e}")
+        client = _get_client()
+    except Exception as e:
+        print(f"[summary] No Gemini client, using template: {e}")
         return template_summary(label, confidence, pneumonia_prob, chunks), "template"
+
+    for model in MODELS:
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    temperature=0.2,
+                ),
+            )
+            text = (response.text or "").strip()
+            if not text:
+                raise RuntimeError("Empty response")
+            print(f"[summary] Answered by {model}")
+            return text, "gemini"
+        except Exception as e:   # busy, quota, timeout... -> try the next model
+            print(f"[summary] {model} failed: {type(e).__name__}: {str(e)[:120]}")
+
+    print("[summary] All Gemini models failed, using template")
+    return template_summary(label, confidence, pneumonia_prob, chunks), "template"
 
 
 if __name__ == "__main__":
